@@ -127,6 +127,22 @@ public struct FengNiao {
         
         return FengNiao.filterUnused(from: allResources, used: usedNames).map( FileInfo.init )
     }
+
+    public func partitionFiles() throws -> (usedFiles: [FileInfo], unusedFiles: [FileInfo]) {
+        guard !resourceExtensions.isEmpty else {
+            throw FengNiaoError.noResourceExtension
+        }
+        guard !searchInFileExtensions.isEmpty else {
+            throw FengNiaoError.noFileExtension
+        }
+
+        let allResources = allResourceFiles()
+        let usedNames = allUsedStringNames()
+
+        let used = FengNiao.filterUsed(from: allResources, used: usedNames)
+        let unused: Set<String> = Set<String>(allResources.flatMap({ $0.value })).subtracting(used)
+        return (used.map( FileInfo.init ), unused.map( FileInfo.init ))
+    }
     
     // Return a failed list of deleting
     static public func delete(_ unusedFiles: [FileInfo]) -> (deleted: [FileInfo], failed :[(FileInfo, Error)]) {
@@ -253,12 +269,41 @@ public struct FengNiao {
         return Set(result)
     }
     
+    // depracated
     static func filterUnused(from all: [String: Set<String>], used: Set<String>) -> Set<String> {
         let unusedPairs = all.filter { key, _ in
             return !used.contains(key) &&
                    !used.contains { $0.similarPatternWithNumberIndex(other: key) }
         }
         return Set( unusedPairs.flatMap { $0.value } )
+    }
+
+    static func filterUsed(from all: [String: Set<String>], used: Set<String>) -> Set<String> {
+        let usedPairs = all.filter { key, _ in
+            return used.contains(key) ||
+                   used.contains { $0.similarPatternWithNumberIndex(other: key) } ||
+                   isConcatenatedPattern(key) ||
+                   key.hasSuffix("-dark") && used.contains(String(key.dropLast(5)))
+        }
+        return Set( usedPairs.flatMap { $0.value } )
+    }
+
+    static func isConcatenatedPattern(_ key: String) -> Bool {
+        // account-icon-\(iconName)
+        // email-\(iconType)-icon
+        // sift-\(type)-icon
+        let patterns = [
+            ["account-icon-", ""],
+            ["email-", "-icon"],
+            ["sift-", "-icon"],
+        ]
+        for p in patterns {
+            let prefix = p[0], suffix = p[1]
+            if (prefix.isEmpty || key.hasPrefix(prefix)) && (suffix.isEmpty || key.hasSuffix(suffix)) {
+                return true
+            }
+        }
+        return false
     }
 }
 

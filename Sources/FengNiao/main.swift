@@ -122,9 +122,10 @@ let fengNiao = FengNiao(projectPath: projectPath,
                         searchInFileExtensions: fileExtensions)
 
 let unusedFiles: [FileInfo]
+let usedFiles: [FileInfo]
 do {
     print("Searching unused file. This may take a while...")
-    unusedFiles = try fengNiao.unusedFiles()
+    (usedFiles, unusedFiles) = try fengNiao.partitionFiles()
 } catch {
     guard let e = error as? FengNiaoError else {
         print("Unknown Error: \(error)".red.bold)
@@ -152,6 +153,22 @@ if !isForce {
         }
         result = promptResult(files: unusedFiles)
     }
+
+    while result == .partition {
+        let usedSize = usedFiles.reduce(0) { $0 + $1.size }.fn_readableSize
+        print("\(usedFiles.count) used files are found. Total Size: \(usedSize)".green.bold)
+        for file in usedFiles.sorted(by: { $0.path == $1.path ? ($0.fileName < $1.fileName) : ($0.path < $1.path) }) {
+            print("\(file.readableSize) \(file.path.string)")
+        }
+
+        let unusedSize = unusedFiles.reduce(0) { $0 + $1.size }.fn_readableSize
+        print("\(unusedFiles.count) unused files are found. Total Size: \(unusedSize)".yellow.bold)
+        for file in unusedFiles.sorted(by: { $0.path == $1.path ? ($0.fileName < $1.fileName) : ($0.path < $1.path) }) {
+            print("\(file.readableSize) \(file.path.string)")
+        }
+
+        result = promptResult(files: unusedFiles)
+    }
     
     switch result {
     case .list:
@@ -161,6 +178,8 @@ if !isForce {
     case .ignore:
         print("Ignored. Nothing to do, bye!".green.bold)
         exit(EX_OK)
+    case .partition:
+        fatalError()
     }
 }
 
